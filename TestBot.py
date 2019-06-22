@@ -15,26 +15,27 @@ import csv
 import urllib2
 import requests
 import ConfigParams
+import network_scanner as scanner
 
 def handle(msg):
     content_type, chat_type, chat_id = telepot.glance(msg)
-    
+
     file_id  =  ""
     chat_id = msg['chat']['id']
     command = ""
     user = ""
-    
+
     if(content_type == "text"):
         chat_id = msg['chat']['id']
         command = msg['text']
         print("in text mode")
         user = msg['from']['first_name']
         print("Got command: %s" %command)
-   
+
         if command == 'time':
             bot.sendMessage(chat_id, str(datetime.datetime.now()))
 
-        #determining reply message based on the hourof day    
+        #determining reply message based on the hourof day
         elif command == 'Hi' or command == 'hi' or command == 'HI' or command == 'hI':     #Hi Query
             replyMessage = "Hi "+ user + " "
             greeting = "It is sleeping time you still awake"
@@ -46,11 +47,11 @@ def handle(msg):
                 greeting = "Good Afternoon"
             elif(hour >= 16 and hour < 20):
                 greeting = "Good Evening"
-            
+
             replyMessage = replyMessage+greeting
             bot.sendMessage(chat_id, replyMessage)
 
-        #gives various details of raspberry pi    
+        #gives various details of raspberry pi
         elif command.lower() == "How are you".lower():      #Health Query
             print("In Health Query")
             cpu_temparature = get_cpu_temparature()
@@ -60,7 +61,7 @@ def handle(msg):
             ram_used = ram.used / 2**20
             ram_free = ram.free / 2**20
             ram_percent_used = ram.percent
-        
+
             disk = psutil.disk_usage('/')
             disk_total = disk.total / 2**30     # GiB.
             disk_used = disk.used / 2**30
@@ -70,7 +71,7 @@ def handle(msg):
             message = "I am doing as \nCPU Temparature "+str(cpu_temparature)+"C \nCPU Usage "+str(cpu_usage)+" \nRam Percent Used "+str(ram_percent_used)+" \nFree Disk Space "+ str(disk_free) + "Gb"
             bot.sendMessage(chat_id, message)
 
-        #sends the local ip address and the wifi name to which it is connected to    
+        #sends the local ip address and the wifi name to which it is connected to
         elif command.lower() == "Where are you".lower():
             print("telling where am I")
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -78,25 +79,25 @@ def handle(msg):
             ipaddr = s.getsockname()[0]
             wifi = Wireless('wlan0')
             wifiname = wifi.getEssid()
-                   
+
             message = "I am connected on "+ipaddr+" \nto WiFi "+wifiname
             bot.sendMessage(chat_id, message)
         elif command.lower()=="coming up cricket":
             print("fetching upcoming matches")
 
-        #if below command is cricket then it will fetch scrores from cricbuzz page    
+        #if below command is cricket then it will fetch scrores from cricbuzz page
         elif command.lower() == "cricket".lower():
             print("Fetching Cricket Scores ...")
             page = requests.get(ConfigParams.crc_buzz_url)
             tree = html.fromstring(page.content)
-            #searching for required data 
+            #searching for required data
             allscoreslist=tree.xpath(ConfigParams.cric_buzz_path)
             allscores = []
             #for loop used to remove duplicate values may override actual existing values some time
             #todo
             for score in allscoreslist:
                 if  score not in allscores:
-                    allscores.append(score)     
+                    allscores.append(score)
             message = ""
             teamscores = []
             #formatting data received for readability
@@ -116,25 +117,25 @@ def handle(msg):
                             message = ""
                     else:
                         message=message+(score+"\t")
-                   
+
             bot.sendMessage(chat_id, "".join(teamscores))
 
-        #used for downloading files uploaded to this bot    
+        #used for downloading files uploaded to this bot
         elif command.lower().find("download") != -1:
-            
+
             if command.split(".")[1] == "jpg" or command.split(".")[1] == "jpeg" or command.split(".")[1] == "png":
                 try:
                     filename = '/home/pi/Scripts/photos/'+command.split(" ")[1]
                     document = open(r'/home/pi/Scripts/photos/'+command.split(" ")[1])
                 except IOError:
-                    bot.sendMessage(chat_id,"File not found")     
+                    bot.sendMessage(chat_id,"File not found")
             else:
                 try:
                     filename = '/home/pi/Scripts/documents/'+command.split(" ")[1]
                     document = open(r'/home/pi/Scripts/documents/'+command.split(" ")[1])
                 except IOError:
                     bot.sendMessage(chat_id,"File not found")
-                    
+
             bot.sendDocument(chat_id, document)
 
         #if message contains stocks key word then it tries to fetch company and sends to get nse stock code to get current price
@@ -143,14 +144,16 @@ def handle(msg):
             company = command.split(":")[1]
             nse = Nse()
             all_codes = readCodesFile('StockCodes.csv', company)
-            if bool(all_codes):     
+            if bool(all_codes):
                 codes = sorted(all_codes.keys())
                 message = " "
-                for code in codes:    
+                for code in codes:
                     message = message + code + " : " + str(nse.get_quote(all_codes[code])['lastPrice'])+"\n"
             else:
                 message = "Stock not found"
             bot.sendMessage(chat_id, message)
+        elif command.lower() == "scan local":
+            message = scanner.get_available_devices_info()
         else:
             message = "My Boss asked me to stay silent rather giving false information"
             bot.sendMessage(chat_id, message)
@@ -159,22 +162,22 @@ def handle(msg):
     elif(content_type == "document" or content_type == "photo" or content_type == "video"):
         if content_type == "document":
             file_id = msg['document']['file_id']
-            
+
             file_name = msg['document']['file_name']
-            
+
         elif content_type == "photo":
             file_id = msg['photo'][-1]['file_id']
-            
+
         elif content_type == "video":
             file_id = msg['video']['file_id']
-            
+
         bot.getUpdates()
         filereceived= bot.getFile(file_id)
-       
+
         filepath = filereceived['file_path']
-        
+
         file_name, file_extension = os.path.splitext(filepath)
-        
+
         if content_type == "document":
             bot.download_file(file_id, "/home/pi/Scripts/"+file_name+file_extension)
             bot.sendMessage(chat_id, "Received and stored your file "+file_name)
@@ -185,26 +188,26 @@ def handle(msg):
             bot.download_file(file_id, "/home/pi/Scripts/"+file_name+file_extension)
             bot.sendMessage(chat_id, "Received and stored your video "+file_name)
 
-    #if user sent message is location then below code is executed        
+    #if user sent message is location then below code is executed
     elif content_type == 'location':
         location = msg['location']
-        
+
         lat = location['latitude']
         lon = location['longitude']
-        
+
         owm = pyowm.OWM(ConfigParams.open_weather_key)
         observation = owm.weather_at_coords(lat, lon)
         weather = observation.get_weather()
         location = observation.get_location()
-        
+
         gmaps = googlemaps.Client(key=ConfigParams.google_key)
         geo_loc = str(lat), str(lon)
         g = geocoder.google(geo_loc,method='reverse')
-        
+
         message = "***Weather&Location Statistics***"
         message = message+"\nCity : "+location.get_name()+"\nState : "+g.state+"\nPostalCode : "+g.postal+"\nTemp Max : "+str(weather.get_temperature('celsius')['temp_max'])+"\nTemp Min : "+str(weather.get_temperature('celsius')['temp_min'])+" \nStatus : "+weather.get_detailed_status()+"\nSunRise : "+weather.get_sunrise_time('iso')
         message = message+"\nSunSetTime : "+weather.get_sunset_time('iso')+"\n"
-        
+
         bot.sendMessage(chat_id, message)
 
 #to get cpu temparature of raspberry pi
@@ -226,7 +229,7 @@ def readCodesFile(fileName, inputName):
     allcodes = {}
     with open(fileName) as csvFile:
         csvReader = csv.DictReader(csvFile)
-        for row in csvReader:   
+        for row in csvReader:
             targets = row['companyname'].split(" ")
             var = 0
             while len(targets) > var :
@@ -234,7 +237,7 @@ def readCodesFile(fileName, inputName):
                     allcodes[row['companyname']] = row['code']
                     break;
                 var = var + 1
-            
+
     return allcodes
 
 #algorithm to find the closest words even though spellings are wrong
@@ -246,8 +249,8 @@ def levenshteinDistance(s, t):
 	l2 = levenshteinDistance(s[1:], t)
 	l3 = levenshteinDistance(s[1:], t[1:])
 	return 1 + min(l1, l2, l3)
-    
-    
+
+
 bot = telepot.Bot(ConfigParams.telegram_key)
 bot.message_loop(handle)
 print("I am listening ...")
